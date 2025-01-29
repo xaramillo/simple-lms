@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LMS - {% block title %}{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- Agregar en el body antes del container -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container">
+        <a class="navbar-brand" href="/">LMS</a>
+        <div class="navbar-nav">
+            {% if current_user.is_authenticated %}
+                <span class="navbar-text me-3">Hola, {{ current_user.username }}</span>
+                <a class="nav-item nav-link" href="{{ url_for('logout') }}">Cerrar Sesión</a>
+            {% else %}
+                <a class="nav-item nav-link" href="{{ url_for('login') }}">Iniciar Sesión</a>
+                {% if config['REGISTRATION_OPEN'] %}
+                    <a class="nav-item nav-link" href="{{ url_for('register') }}">Registrarse</a>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+</nav>
+    <div class="container mt-4">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

@@ -1,0 +1,21 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./courses:/app/courses
+      - ./data:/data
+    environment:
+      - SECRET_KEY=tu_clave_secreta_aqui
+      - DATABASE_URL=sqlite:////data/lms.db
+      - COURSES_DIR=/app/courses
+      - REGISTRATION_OPEN=True
+    restart: unless-stopped
+
+volumes:
+  courses:
+  data:

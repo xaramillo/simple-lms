@@ -13,20 +13,10 @@ from flask_login import (
 import markdown
 from werkzeug.security import generate_password_hash, check_password_hash
 
-# Configuración inicial
-app = Flask(__name__)
-app.config["SECRET_KEY"] = "tu_clave_secreta_muy_segura_aqui"
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///lms.db"
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["COURSES_DIR"] = "courses"
-app.config["REGISTRATION_OPEN"] = True  # Permitir auto-registro
-
 # Inicialización de extensiones
-db = SQLAlchemy(app)
-login_manager = LoginManager(app)
-login_manager.login_view = "login"
+db = SQLAlchemy()
+login_manager = LoginManager()
 
-# Modelo de Usuario
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -39,26 +29,62 @@ class User(UserMixin, db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
-# Clase Curso (sin cambios)
 class Course:
     def __init__(self, course_path):
         self.path = course_path
         self.load_metadata()
         self.load_content()
-    
-    # ... (mismos métodos que antes)
+        
+    def load_metadata(self):
+        with open(os.path.join(self.path, 'meta.json'), 'r') as f:
+            metadata = json.load(f)
+            self.title = metadata['title']
+            self.description = metadata['description']
+            self.author = metadata.get('author', '')
+            self.slug = os.path.basename(self.path)
+            
+    def load_content(self):
+        with open(os.path.join(self.path, 'content.md'), 'r') as f:
+            self.raw_content = f.read()
+            self.content = markdown.markdown(self.raw_content)
+
+def load_courses(courses_dir):
+    courses = []
+    for entry in os.listdir(courses_dir):
+        course_path = os.path.join(courses_dir, entry)
+        if os.path.isdir(course_path):
+            try:
+                courses.append(Course(course_path))
+            except Exception as e:
+                print(f"Error loading course {entry}: {str(e)}")
+    return courses
 
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-def load_courses():
-    # ... (misma implementación que antes)
-
-# Crear la aplicación
 def create_app():
-    # ... (configuración previa)
+    app = Flask(__name__)
     
+    # Configuración desde variables de entorno
+    app.config.from_mapping(
+        SECRET_KEY=os.environ.get('SECRET_KEY', 'dev-key'),
+        SQLALCHEMY_DATABASE_URI=os.environ.get('DATABASE_URL', 'sqlite:///lms.db'),
+        SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        COURSES_DIR=os.environ.get('COURSES_DIR', 'courses'),
+        REGISTRATION_OPEN=os.environ.get('REGISTRATION_OPEN', 'True') == 'True'
+    )
+
+    # Inicializar extensiones
+    db.init_app(app)
+    login_manager.init_app(app)
+    login_manager.login_view = 'login'
+
+    # Crear tablas y cargar cursos
+    with app.app_context():
+        db.create_all()
+        app.courses = load_courses(app.config['COURSES_DIR'])
+
     # Rutas de autenticación
     @app.route("/login", methods=["GET", "POST"])
     def login():
@@ -110,26 +136,21 @@ def create_app():
 
         return render_template("register.html")
 
-    # Rutas existentes actualizadas con protección
-    @app.route("/")
+    # Rutas principales
+    @app.route('/')
     def index():
-        return render_template("index.html", courses=app.courses)
-
-    @app.route("/course/<slug>")
+        return render_template('index.html', courses=app.courses)
+    
+    @app.route('/course/<slug>')
     @login_required
     def course_detail(slug):
         course = next((c for c in app.courses if c.slug == slug), None)
         if not course:
-            return "Curso no encontrado", 404
-        return render_template("course.html", course=course)
+            return "Course not found", 404
+        return render_template('course.html', course=course)
 
     return app
 
-if __name__ == "__main__":
-    # Crear tablas si no existen
-    with app.app_context():
-        db.create_all()
-    
+if __name__ == '__main__':
     app = create_app()
-    app.courses = load_courses(app.config["COURSES_DIR"])
-    app.run(debug=True)
+    app.run()
